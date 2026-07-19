@@ -1,0 +1,4 @@
+[tools]
+bun = "latest"
+"ubi:rojo-rbx/rojo" = "7.7.0"
+"ubi:seaofvoices/darklua" = "v0.18.0"

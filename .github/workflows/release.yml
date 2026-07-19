@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Check tag matches package.json version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(bun -e 'console.log(require("./package.json").version)')"
+          if [[ "$version" != "$pkg_version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      - name: Build binaries
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          declare -A targets=(
+            [bun-linux-x64]=linux-x86_64
+            [bun-linux-arm64]=linux-aarch64
+            [bun-darwin-x64]=macos-x86_64
+            [bun-darwin-arm64]=macos-aarch64
+            [bun-windows-x64]=windows-x86_64
+          )
+          for target in "${!targets[@]}"; do
+            ext=""
+            [[ "$target" == *windows* ]] && ext=".exe"
+            bun build --compile --target="$target" src/index.ts \
+              --outfile "dist/$target/rwork$ext"
+            (cd "dist/$target" && zip "../rwork-$version-${targets[$target]}.zip" "rwork$ext")
+          done
+
+      - name: Smoke test linux binary
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$(dist/bun-linux-x64/rwork --version)" == "$version" ]]
+
+      - name: Create release
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
