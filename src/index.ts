@@ -3,6 +3,8 @@ import { parseRworkConfig } from "./config";
 import { build } from "./commands/build";
 import { sync } from "./commands/sync";
 import { dev } from "./commands/dev";
+import { publish } from "./commands/publish";
+import { log } from "./log";
 
 const args = parseArgs(Bun.argv.slice(2));
 
@@ -21,6 +23,13 @@ switch (args.command) {
 		await sync(rworkBuild);
 		break;
 	case "dev":
-		await dev(rworkBuild);
+		await dev(rworkBuild, args.place);
+		break;
+	case "publish":
+		if (!args.place) {
+			log.error("publish requires a place: pass --place <id> or set RWORK_PLACE");
+			process.exit(1);
+		}
+		publish(rworkBuild, args.place);
 		break;
 }

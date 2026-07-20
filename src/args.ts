@@ -1,11 +1,14 @@
 export interface CliArgs {
-	command: "build" | "sync" | "dev";
+	command: "build" | "sync" | "dev" | "publish";
 	preset: string;
 	project?: string;
 	src?: string;
 	darklua?: string;
 	globalOverrides?: Record<string, string>;
 	open?: boolean;
+	// Live place id (--place, or RWORK_PLACE). Its presence puts dev in live mode:
+	// build+publish to the place, open it via rodeo, then sync into it.
+	place?: string;
 }
 
 function parseGlobalValue(raw: string): string | boolean | number {
@@ -25,8 +28,8 @@ export function parseArgs(argv: string[]): CliArgs {
 	}
 
 	const command = argv[0] as CliArgs["command"];
-	if (!command || !["build", "sync", "dev"].includes(command)) {
-		console.error(`Usage: rwork <build|sync|dev> [options]`);
+	if (!command || !["build", "sync", "dev", "publish"].includes(command)) {
+		console.error(`Usage: rwork <build|sync|dev|publish> [options]`);
 		process.exit(1);
 	}
 
@@ -35,6 +38,7 @@ export function parseArgs(argv: string[]): CliArgs {
 	let src: string | undefined;
 	let darklua: string | undefined;
 	let open = false;
+	let place: string | undefined;
 	const globalOverrides: Record<string, string> = {};
 
 	const args = argv.slice(1);
@@ -63,6 +67,9 @@ export function parseArgs(argv: string[]): CliArgs {
 			case "-o":
 				open = true;
 				break;
+			case "--place":
+				place = args[++i];
+				break;
 			case "-G": {
 				const pair = args[++i];
 				const eq = pair?.indexOf("=");
@@ -85,5 +92,6 @@ export function parseArgs(argv: string[]): CliArgs {
 		darklua,
 		globalOverrides: Object.keys(globalOverrides).length > 0 ? globalOverrides : undefined,
 		open,
+		place: place ?? process.env.RWORK_PLACE,
 	};
 }
