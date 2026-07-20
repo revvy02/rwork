@@ -29,12 +29,11 @@ interface CliOverrides {
 	globals?: Record<string, string>;
 }
 
+// rwork expects rojo and rodeo as sibling tools on PATH.
 export const envConfig = {
-	buildTool: process.env.BUILD_TOOL ?? "rojo",
-	syncTool: process.env.SYNC_TOOL ?? "rojo",
-	includeAssetsWhenSyncing: process.env.INCLUDE_ASSETS_WHEN_SYNCING !== "false",
+	includeAssetsWhenSyncing: process.env.RWORK_INCLUDE_ASSETS_WHEN_SYNCING !== "false",
 	includeServerStorageWhenSyncing:
-		process.env.INCLUDE_SERVER_STORAGE_WHEN_SYNCING !== "false",
+		process.env.RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING !== "false",
 };
 
 export function parseRworkConfig(

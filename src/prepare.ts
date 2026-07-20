@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
 import type { RworkBuild } from "./config";
-import { envConfig } from "./config";
 import { prepareDarklua } from "./darklua";
 import { mutatePaths } from "./paths";
 import { initialSync } from "./sync-engine";
@@ -75,7 +74,7 @@ function runSourcemapRegen(outputDir: string) {
 	const t0 = Date.now();
 	try {
 		execSync(
-			`${envConfig.syncTool} sourcemap ${outputDir}/sourcemap.project.json -o ${outputDir}/sourcemap.json`,
+			`rojo sourcemap ${outputDir}/sourcemap.project.json -o ${outputDir}/sourcemap.json`,
 			{ stdio: "inherit" },
 		);
 		log.diag(`runSourcemapRegen ok in ${Date.now() - t0}ms`);
@@ -127,7 +126,7 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 
 	// Generate sourcemap
 	execSync(
-		`${envConfig.syncTool} sourcemap sourcemap.project.json -o sourcemap.json`,
+		`rojo sourcemap sourcemap.project.json -o sourcemap.json`,
 		{ cwd: outputDir, stdio: "inherit" },
 	);
 

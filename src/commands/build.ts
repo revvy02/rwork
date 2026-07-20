@@ -1,5 +1,4 @@
 import type { RworkBuild } from "../config";
-import { envConfig } from "../config";
 import { prepareOut } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
@@ -16,7 +15,7 @@ export function build(rworkBuild: RworkBuild, options?: { open?: boolean }) {
 	});
 
 	log.info("Building the place file...");
-	const proc = Bun.spawnSync([envConfig.buildTool, "build", "-o", "build.rbxl"], {
+	const proc = Bun.spawnSync(["rojo", "build", "-o", "build.rbxl"], {
 		cwd,
 		stdio: ["inherit", "inherit", "inherit"],
 	});

@@ -1,5 +1,4 @@
 import type { RworkBuild } from "../config";
-import { envConfig } from "../config";
 import { prepareOut } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
@@ -20,7 +19,7 @@ export function publish(rworkBuild: RworkBuild, place: string, options?: { open?
 	});
 
 	log.info(`Publishing to place ${place}...`);
-	const proc = Bun.spawnSync([envConfig.buildTool, "upload", "--asset_id", place], {
+	const proc = Bun.spawnSync(["rojo", "upload", "--asset_id", place], {
 		cwd,
 		stdio: ["inherit", "inherit", "inherit"],
 	});

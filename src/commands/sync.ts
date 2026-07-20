@@ -72,7 +72,7 @@ export async function sync(rworkBuild: RworkBuild) {
 	// 2. Sourcemap watcher
 	const sourcemapProc = Bun.spawn(
 		[
-			envConfig.syncTool,
+			"rojo",
 			"sourcemap",
 			`${cwd}/sourcemap.project.json`,
 			"-o",
@@ -109,7 +109,7 @@ export async function sync(rworkBuild: RworkBuild) {
 	// callback, the branch-switch interval, and the diag heartbeats.
 	// Using spawnSync here parks the main thread; FSEvents callbacks queue
 	// onto the event loop but never get dispatched until rojo serve exits.
-	const serveProc = Bun.spawn([envConfig.syncTool, "serve"], {
+	const serveProc = Bun.spawn(["rojo", "serve"], {
 		cwd,
 		stdio: ["inherit", "inherit", "inherit"],
 	});
