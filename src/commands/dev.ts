@@ -8,8 +8,7 @@ import { log } from "../log";
 export async function dev(rworkBuild: RworkBuild, place?: string) {
 	if (place) {
 		// Live mode: build+publish to the place, then open THAT place in Studio.
-		publish(rworkBuild, place);
-		openStudio(place);
+		publish(rworkBuild, place, { open: true });
 	} else {
 		// Local mode: build the place file and open it.
 		build(rworkBuild);

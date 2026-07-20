@@ -30,6 +30,6 @@ switch (args.command) {
 			log.error("publish requires a place: pass --place <id> or set RWORK_PLACE");
 			process.exit(1);
 		}
-		publish(rworkBuild, args.place);
+		publish(rworkBuild, args.place, { open: args.open });
 		break;
 }
