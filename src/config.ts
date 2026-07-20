@@ -1,7 +1,15 @@
 import { parse as parseToml } from "smol-toml";
 import { readFileSync } from "fs";
 import { log } from "./log";
-import { parseGlobalValue } from "./args";
+
+// Coerce a -G override value to bool/number/string so overrides match toml types.
+function parseGlobalValue(raw: string): string | boolean | number {
+	if (raw === "true") return true;
+	if (raw === "false") return false;
+	const num = Number(raw);
+	if (!Number.isNaN(num)) return num;
+	return raw;
+}
 
 export interface RworkBuild {
 	name: string;
