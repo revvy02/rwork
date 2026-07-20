@@ -58,11 +58,13 @@ rwork dev --place <id>              # publish + open the place + sync into it
 rwork publish --place <id> --open   # publish and open, no sync loop
 ```
 
-Publishing uses Rojo's cookie auth (your Studio login), so only the place id is needed — no API key.
+Publishing authenticates via an Open Cloud API key: set `RWORK_API_KEY` (a key with place-publishing scope for the place's universe) and the universe is auto-resolved from the place id. Without a key, it falls back to Rojo's cookie auth.
 
 ## Environment
 
 - `RWORK_PLACE` — default live place id
+- `RWORK_API_KEY` — Open Cloud key for publishing (place-publishing scope)
+- `RWORK_UNIVERSE` — override the auto-resolved universe id when publishing
 - `RWORK_DIAG=1` — verbose diagnostic logging
 - `RWORK_INCLUDE_ASSETS_WHEN_SYNCING` / `RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING` — set `false` to exclude during sync
 
