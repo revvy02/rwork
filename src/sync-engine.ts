@@ -47,6 +47,14 @@ function* walkDir(dir: string): Generator<string> {
 
 /** Write one src file to dest (hard-link, copy, or skip per extension rules). Idempotent. */
 function writeOneFile(srcPath: string, destPath: string, relPath: string): void {
+	// .luau is owned by darklua (--watch in sync, one-shot in build/publish);
+	// rwork must not touch it. The pre-unlink below would otherwise race
+	// darklua's write and can delete its output, dropping the module from the
+	// synced tree (e.g. an edited init.luau vanishing, so its folder stops being
+	// a ModuleScript). Skip .luau BEFORE the unlink. Deletes are still handled
+	// by onFileUnlink (darklua --watch leaves stale output on a source delete).
+	if (shouldSkipCopy(relPath)) return;
+
 	mkdirSync(dirname(destPath), { recursive: true });
 
 	try {
@@ -57,8 +65,6 @@ function writeOneFile(srcPath: string, destPath: string, relPath: string): void 
 			log.diag(`writeOneFile pre-unlink failed: ${relPath}: ${(e as Error).message}`);
 		}
 	}
-
-	if (shouldSkipCopy(relPath)) return; // darklua handles .luau
 
 	if (shouldHardLink(relPath)) {
 		try {
