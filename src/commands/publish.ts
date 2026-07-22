@@ -52,7 +52,10 @@ async function publishViaOpenCloud(cwd: string, place: string, apiKey: string) {
 	// large (tens-of-MB) upload requests, which the Roblox edge rejects with a
 	// generic HTML "400 Bad request". curl is reliable and ubiquitous. The API
 	// key is written to a 0600 temp header file (curl -H @file) so it never
-	// appears in the process argument list.
+	// appears in the process argument list. --retry (with --retry-all-errors, so
+	// transient transport drops like "curl (55) Recv failure" and timeouts are
+	// covered) makes the large upload resilient to a flaky connection; identical
+	// content is deduped server-side, so a retried publish is safe.
 	const headerFile = join(tmpdir(), `rwork-oc-header-${process.pid}`);
 	const responseFile = join(tmpdir(), `rwork-oc-response-${process.pid}`);
 	writeFileSync(headerFile, `x-api-key: ${apiKey}\n`, { mode: 0o600 });
@@ -61,6 +64,11 @@ async function publishViaOpenCloud(cwd: string, place: string, apiKey: string) {
 		const curl = Bun.spawnSync(
 			[
 				"curl", "-sS",
+				"--connect-timeout", "20",
+				"--max-time", "180",
+				"--retry", "4",
+				"--retry-delay", "3",
+				"--retry-all-errors",
 				"-X", "POST",
 				"-H", `@${headerFile}`,
 				"-H", "Content-Type: application/octet-stream",
