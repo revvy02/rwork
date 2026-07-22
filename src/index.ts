@@ -39,7 +39,7 @@ function resolveBuild(opts: BuildOpts) {
 }
 
 function resolvePlace(place?: string): string | undefined {
-	return place ?? process.env.RWORK_PLACE;
+	return place ?? process.env.RWORK_PLACE_ID;
 }
 
 const program = new Command();
@@ -76,19 +76,19 @@ withBuildOptions(program.command("sync"))
 
 withBuildOptions(program.command("dev"))
 	.description("Build + open + sync (local loop); --place for live mode")
-	.option("--place <id>", "live place id (or RWORK_PLACE) — enables live mode")
+	.option("--place <id>", "live place id (or RWORK_PLACE_ID) — enables live mode")
 	.action(async (opts) => {
 		await dev(resolveBuild(opts), resolvePlace(opts.place));
 	});
 
 withBuildOptions(program.command("publish"))
 	.description("Build + upload the place to a live place")
-	.option("--place <id>", "live place id (or RWORK_PLACE)")
+	.option("--place <id>", "live place id (or RWORK_PLACE_ID)")
 	.option("-o, --open", "open the place in Studio after publishing")
 	.action(async (opts) => {
 		const place = resolvePlace(opts.place);
 		if (!place) {
-			log.error("publish requires a place: pass --place <id> or set RWORK_PLACE");
+			log.error("publish requires a place: pass --place <id> or set RWORK_PLACE_ID");
 			process.exit(1);
 		}
 		await publish(resolveBuild(opts), place, { open: opts.open });

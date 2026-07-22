@@ -51,7 +51,7 @@ rwork publish --place <id>   # build + upload to a live place
 
 ### Live places
 
-Pass `--place <id>` (or set `RWORK_PLACE`) to work against a real Roblox place instead of a local file:
+Pass `--place <id>` (or set `RWORK_PLACE_ID`) to work against a real Roblox place instead of a local file:
 
 ```sh
 rwork dev --place <id>              # publish + open the place + sync into it
@@ -62,9 +62,9 @@ Publishing authenticates via an Open Cloud API key: set `RWORK_API_KEY` (a key w
 
 ## Environment
 
-- `RWORK_PLACE` — default live place id
+- `RWORK_PLACE_ID` — default live place id
 - `RWORK_API_KEY` — Open Cloud key for publishing (place-publishing scope)
-- `RWORK_UNIVERSE` — override the auto-resolved universe id when publishing
+- `RWORK_UNIVERSE_ID` — override the auto-resolved universe id when publishing
 - `RWORK_DIAG=1` — verbose diagnostic logging
 - `RWORK_INCLUDE_ASSETS_WHEN_SYNCING` / `RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING` — set `false` to exclude during sync
 
