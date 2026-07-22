@@ -52,10 +52,13 @@ async function publishViaOpenCloud(cwd: string, place: string, apiKey: string) {
 	// large (tens-of-MB) upload requests, which the Roblox edge rejects with a
 	// generic HTML "400 Bad request". curl is reliable and ubiquitous. The API
 	// key is written to a 0600 temp header file (curl -H @file) so it never
-	// appears in the process argument list. --retry (with --retry-all-errors, so
-	// transient transport drops like "curl (55) Recv failure" and timeouts are
-	// covered) makes the large upload resilient to a flaky connection; identical
-	// content is deduped server-side, so a retried publish is safe.
+	// appears in the process argument list. Resilience for a flaky connection:
+	// --retry (+ --retry-all-errors, so transient drops like "curl (55) Recv
+	// failure" and timeouts retry) plus stall detection (--speed-time/-limit:
+	// abort only if the transfer stalls below 1KB/s for 30s, NOT on a fixed
+	// total-time cap, so a slow-but-progressing upload isn't cut; --max-time is
+	// just a generous backstop). Identical content is deduped server-side, so a
+	// retried publish is safe.
 	const headerFile = join(tmpdir(), `rwork-oc-header-${process.pid}`);
 	const responseFile = join(tmpdir(), `rwork-oc-response-${process.pid}`);
 	writeFileSync(headerFile, `x-api-key: ${apiKey}\n`, { mode: 0o600 });
@@ -65,7 +68,9 @@ async function publishViaOpenCloud(cwd: string, place: string, apiKey: string) {
 			[
 				"curl", "-sS",
 				"--connect-timeout", "20",
-				"--max-time", "180",
+				"--speed-limit", "1000",
+				"--speed-time", "30",
+				"--max-time", "600",
 				"--retry", "4",
 				"--retry-delay", "3",
 				"--retry-all-errors",
