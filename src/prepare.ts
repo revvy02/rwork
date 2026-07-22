@@ -97,7 +97,7 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 	}
 
 	// Generate darklua config in .rwork/<build>/darklua.json
-	const darkluaConfig = prepareDarklua(build);
+	prepareDarklua(build);
 
 	// Output project file: structural transforms + path remapping for cwd=outputDir
 	const outputProject = generateProjectFile(structuredClone(baseFile), {
@@ -130,8 +130,16 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 		{ cwd: outputDir, stdio: "inherit" },
 	);
 
-	// One-shot sync: hard-link binaries + darklua process .luau files
+	// Hard-link/copy non-lua assets + regenerate the sourcemap. Compiling .luau is
+	// a separate step the caller runs: runDarkluaOnce for a one-shot build, or
+	// `darklua --watch` in sync.
 	initialSync(srcFolder, join(outputDir, srcFolder));
 	runSourcemapRegen(outputDir);
-	runDarklua(srcFolder, join(outputDir, srcFolder), darkluaConfig);
+}
+
+/** Compile .luau once over the prepared tree (one-shot). build/publish use this;
+ *  sync runs `darklua --watch` instead. */
+export function runDarkluaOnce(build: RworkBuild) {
+	const outputDir = `.rwork/${build.name}`;
+	runDarklua(build.src, join(outputDir, build.src), `${outputDir}/darklua.json`);
 }

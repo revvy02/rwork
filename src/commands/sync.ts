@@ -1,12 +1,68 @@
 import { readFileSync } from "fs";
 import type { RworkBuild } from "../config";
 import { envConfig } from "../config";
-import { prepareOut, runDarklua, runSourcemapRegen } from "../prepare";
+import { prepareOut } from "../prepare";
 import { startWatch } from "../sync-engine";
 import { log } from "../log";
 
+// Spawn `darklua process src dest --watch`, echo its output, and resolve once the
+// initial full build finishes (first "successfully processed" line). darklua then
+// stays alive and rebuilds only changed .luau (+ dependents) incrementally (~ms).
+// Times out so a misconfigured darklua can't hang startup forever.
+function spawnDarkluaWatch(
+	src: string,
+	dest: string,
+	config: string,
+	timeoutMs: number,
+) {
+	const proc = Bun.spawn(
+		["darklua", "process", src, dest, "--watch", "--config", config],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
+
+	const initialBuild = new Promise<void>((resolve) => {
+		let done = false;
+		let timer: ReturnType<typeof setTimeout>;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			clearTimeout(timer);
+			resolve();
+		};
+		timer = setTimeout(() => {
+			log.warn("[sync] darklua initial build timed out; continuing anyway");
+			finish();
+		}, timeoutMs);
+
+		const pump = async (
+			stream: ReadableStream<Uint8Array>,
+			echo: (s: string) => void,
+		) => {
+			const reader = stream.getReader();
+			const decoder = new TextDecoder();
+			for (;;) {
+				const { done: eof, value } = await reader.read();
+				if (eof) break;
+				const text = decoder.decode(value, { stream: true });
+				echo(text);
+				if (text.includes("successfully processed")) finish();
+			}
+		};
+		void pump(proc.stdout as ReadableStream<Uint8Array>, (s) =>
+			process.stdout.write(s),
+		);
+		void pump(proc.stderr as ReadableStream<Uint8Array>, (s) =>
+			process.stderr.write(s),
+		);
+	});
+
+	return { proc, initialBuild };
+}
+
 export async function sync(rworkBuild: RworkBuild) {
 	const cwd = `.rwork/${rworkBuild.name}`;
+	const src = rworkBuild.src;
+	const dest = `${cwd}/${src}`;
 	const darkluaConfig = `${cwd}/darklua.json`;
 
 	log.warn(
@@ -14,62 +70,34 @@ export async function sync(rworkBuild: RworkBuild) {
 	);
 	log.warn(`Darklua Config: ${darkluaConfig}`);
 
+	// Hard-link assets + generate the project/sourcemap, but let `darklua --watch`
+	// own the .luau build so we don't pay the full one-shot cost twice.
 	prepareOut(rworkBuild, {
 		includeWorkspace: false,
 		includeServerStorage: envConfig.includeServerStorageWhenSyncing,
 		includeAssets: envConfig.includeAssetsWhenSyncing,
 	});
 
-	// Debounced darklua runner
-	let darkluaTimeout: ReturnType<typeof setTimeout> | null = null;
-	let darkluaPending = false;
-	let darkluaRuns = 0;
-	let darkluaErrors = 0;
-	const DEBOUNCE_MS = 100;
+	// darklua --watch: full build once, then ~ms incremental rebuilds on .luau
+	// content edits. Wait for the initial build before serving so Studio gets a
+	// complete tree.
+	log.info("[sync] Starting darklua --watch...");
+	const { proc: darkluaProc, initialBuild } = spawnDarkluaWatch(
+		src,
+		dest,
+		darkluaConfig,
+		120_000,
+	);
+	await initialBuild;
+	log.success("[sync] darklua initial build complete");
 
-	function runDarkluaDebounced() {
-		log.diag(`runDarkluaDebounced called (pendingTimeout=${darkluaTimeout !== null})`);
-		if (darkluaTimeout) clearTimeout(darkluaTimeout);
-		darkluaPending = true;
-		darkluaTimeout = setTimeout(() => {
-			darkluaTimeout = null;
-			darkluaPending = false;
-			const t0 = Date.now();
-			darkluaRuns++;
-			log.diag(`darklua run #${darkluaRuns} starting`);
-			try {
-				runSourcemapRegen(cwd);
-				runDarklua(
-					rworkBuild.src,
-					`${cwd}/${rworkBuild.src}`,
-					darkluaConfig,
-				);
-				log.diag(`darklua run #${darkluaRuns} ok in ${Date.now() - t0}ms`);
-			} catch (e) {
-				darkluaErrors++;
-				log.error(`[sync] darklua run #${darkluaRuns} threw: ${(e as Error).message}`);
-				log.diag((e as Error).stack ?? "(no stack)");
-			}
-		}, DEBOUNCE_MS);
-	}
+	// rwork's own watcher hard-links non-lua and cleans deletes; darklua owns the
+	// .luau content, so there's no onLuauChange callback.
+	startWatch({ src, dest });
 
-	// Heartbeat for darklua side so we can spot a stuck pending timer.
-	if (log.diagEnabled) {
-		setInterval(() => {
-			log.diag(
-				`darklua state: runs=${darkluaRuns} errors=${darkluaErrors} pending=${darkluaPending}`,
-			);
-		}, 30_000);
-	}
-
-	// 1. File sync watcher: hard-links binaries, triggers darklua on .luau changes
-	startWatch({
-		src: rworkBuild.src,
-		dest: `${cwd}/${rworkBuild.src}`,
-		onLuauChange: runDarkluaDebounced,
-	});
-
-	// 2. Sourcemap watcher
+	// Keep the sourcemap fresh so darklua's convert_require resolves new/renamed
+	// modules (a structural change rewrites it; content-only edits leave it alone,
+	// and darklua no-ops on an unchanged sourcemap).
 	const sourcemapProc = Bun.spawn(
 		[
 			"rojo",
@@ -83,7 +111,7 @@ export async function sync(rworkBuild: RworkBuild) {
 		{ stdio: ["inherit", "inherit", "inherit"] },
 	);
 
-	// 3. Branch switch detector
+	// Branch switch detector
 	let initialHead: string;
 	try {
 		initialHead = readFileSync(".git/HEAD", "utf-8");
@@ -91,24 +119,24 @@ export async function sync(rworkBuild: RworkBuild) {
 		initialHead = "";
 	}
 
+	let branchInterval: ReturnType<typeof setInterval> | null = null;
 	if (initialHead) {
-		const branchInterval = setInterval(() => {
+		branchInterval = setInterval(() => {
 			try {
 				const currentHead = readFileSync(".git/HEAD", "utf-8");
 				if (currentHead !== initialHead) {
 					log.warn("Branch switch detected, aborting sync...");
-					clearInterval(branchInterval);
+					if (branchInterval) clearInterval(branchInterval);
 					sourcemapProc.kill();
+					darkluaProc.kill();
 					process.exit(0);
 				}
 			} catch {}
 		}, 1000);
 	}
 
-	// 4. Rojo serve — async so the JS event loop stays free for the fs.watch
-	// callback, the branch-switch interval, and the diag heartbeats.
-	// Using spawnSync here parks the main thread; FSEvents callbacks queue
-	// onto the event loop but never get dispatched until rojo serve exits.
+	// rojo serve — main loop. Async so the event loop stays free for the fs.watch
+	// callbacks, the branch-switch interval, and the darklua output pumps.
 	const serveProc = Bun.spawn(["rojo", "serve"], {
 		cwd,
 		stdio: ["inherit", "inherit", "inherit"],
@@ -120,6 +148,8 @@ export async function sync(rworkBuild: RworkBuild) {
 
 	// Cleanup
 	sourcemapProc.kill();
+	darkluaProc.kill();
+	if (branchInterval) clearInterval(branchInterval);
 
 	if (exitCode !== 0) {
 		process.exit(exitCode ?? 1);

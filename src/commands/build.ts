@@ -1,5 +1,5 @@
 import type { RworkBuild } from "../config";
-import { prepareOut } from "../prepare";
+import { prepareOut, runDarkluaOnce } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
 
@@ -13,6 +13,7 @@ export function build(rworkBuild: RworkBuild, options?: { open?: boolean }) {
 		includeServerStorage: true,
 		includeAssets: true,
 	});
+	runDarkluaOnce(rworkBuild);
 
 	log.info("Building the place file...");
 	const proc = Bun.spawnSync(["rojo", "build", "-o", "build.rbxl"], {

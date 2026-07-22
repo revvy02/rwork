@@ -2,7 +2,7 @@ import { writeFileSync, readFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import type { RworkBuild } from "../config";
-import { prepareOut } from "../prepare";
+import { prepareOut, runDarkluaOnce } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
 
@@ -109,6 +109,7 @@ export async function publish(
 		includeServerStorage: true,
 		includeAssets: true,
 	});
+	runDarkluaOnce(rworkBuild);
 
 	const apiKey = process.env.RWORK_API_KEY;
 	if (apiKey) {
