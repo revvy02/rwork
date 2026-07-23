@@ -77,8 +77,12 @@ withBuildOptions(program.command("sync"))
 withBuildOptions(program.command("dev"))
 	.description("Build + open + sync (local loop); --place for live mode")
 	.option("--place <id>", "live place id (or RWORK_PLACE_ID) — enables live mode")
+	.option(
+		"--upload",
+		"live mode: push a fresh build to the place before opening (default: open the published place and live-sync, no upload)",
+	)
 	.action(async (opts) => {
-		await dev(resolveBuild(opts), resolvePlace(opts.place));
+		await dev(resolveBuild(opts), resolvePlace(opts.place), { upload: opts.upload });
 	});
 
 withBuildOptions(program.command("publish"))
