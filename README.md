@@ -38,6 +38,35 @@ __DEV_TOOLS__ = false
 
 Select one with `--preset <name>` (default `dev`; `--dev`/`--prod` are shorthands).
 
+### Named places
+
+Declare shared deploy targets in a `[places]` section, optionally binding each to
+a preset:
+
+```toml
+[places.staging]
+id = 1234567890
+preset = "prod"
+
+[places.prod]
+id = 9876543210
+preset = "minify"
+```
+
+`--place` accepts a `[places.*]` name or a raw place id, resolved the same way in
+every command. Targeting a named place makes its bound preset the default, and an
+explicit `--preset` that contradicts the binding is an error — so a dev build
+can't accidentally ship to a prod-bound place:
+
+```sh
+rwork publish --place staging          # prod build → place 1234567890
+rwork publish --place staging --dev   # error: conflicts with bound preset "prod"
+```
+
+`RWORK_PLACE_ID` stays the per-developer scratch target: point it at your own
+place and any build publishes there without flags (it resolves through the same
+rule, so it may also hold a place name).
+
 ## Commands
 
 ```sh
@@ -51,18 +80,18 @@ rwork publish --place <id>   # build + upload to a live place
 
 ### Live places
 
-Pass `--place <id>` (or set `RWORK_PLACE_ID`) to work against a real Roblox place instead of a local file:
+Pass `--place <id|name>` (or set `RWORK_PLACE_ID`) to work against a real Roblox place instead of a local file:
 
 ```sh
-rwork dev --place <id>              # publish + open the place + sync into it
-rwork publish --place <id> --open   # publish and open, no sync loop
+rwork dev --place <id|name>              # publish + open the place + sync into it
+rwork publish --place <id|name> --open   # publish and open, no sync loop
 ```
 
 Publishing authenticates via an Open Cloud API key: set `RWORK_API_KEY` (a key with place-publishing scope for the place's universe) and the universe is auto-resolved from the place id. Without a key, it falls back to Rojo's cookie auth.
 
 ## Environment
 
-- `RWORK_PLACE_ID` — default live place id
+- `RWORK_PLACE_ID` — default live place (a raw id or a `[places.*]` name); meant as each dev's personal scratch place
 - `RWORK_API_KEY` — Open Cloud key for publishing (place-publishing scope)
 - `RWORK_UNIVERSE_ID` — override the auto-resolved universe id when publishing
 - `RWORK_DIAG=1` — verbose diagnostic logging

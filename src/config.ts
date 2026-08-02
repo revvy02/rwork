@@ -26,8 +26,14 @@ interface TomlBuild {
 	globals?: Record<string, string | boolean | number>;
 }
 
+interface TomlPlace {
+	id?: number | string;
+	preset?: string;
+}
+
 interface RworkToml {
 	build?: Record<string, TomlBuild>;
+	places?: Record<string, TomlPlace>;
 }
 
 interface CliOverrides {
@@ -44,12 +50,41 @@ export const envConfig = {
 		process.env.RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING !== "false",
 };
 
+function readRworkToml(): RworkToml {
+	const raw = readFileSync("rwork.toml", "utf-8");
+	return parseToml(raw) as unknown as RworkToml;
+}
+
+export interface NamedPlace {
+	name: string;
+	id: string;
+	// Preset this place is bound to; becomes the default preset when the place
+	// is targeted, and an explicit contradicting --preset is an error.
+	preset?: string;
+}
+
+// Look up a [places.<name>] entry from rwork.toml. Returns undefined when the
+// name doesn't match, so callers can fall back to treating it as a raw id.
+export function lookupPlace(name: string): NamedPlace | undefined {
+	const entry = readRworkToml().places?.[name];
+	if (!entry) return undefined;
+
+	if (entry.id === undefined) {
+		log.error(`rwork.toml: places.${name}.id is required`);
+		process.exit(1);
+	}
+
+	log.info(
+		`[RworkPlace] ${name} → ${entry.id}${entry.preset ? ` (preset ${entry.preset})` : ""}`,
+	);
+	return { name, id: String(entry.id), preset: entry.preset };
+}
+
 export function parseRworkConfig(
 	buildName: string,
 	overrides?: CliOverrides,
 ): RworkBuild {
-	const raw = readFileSync("rwork.toml", "utf-8");
-	const toml = parseToml(raw) as unknown as RworkToml;
+	const toml = readRworkToml();
 
 	if (!toml.build) {
 		log.error("rwork.toml: missing [build] section");
