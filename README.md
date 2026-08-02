@@ -2,7 +2,7 @@
 
 A CLI for fully managed Rojo workflows — build, sync, and publish Roblox places from one config.
 
-rwork drives [Rojo](https://github.com/rojo-rbx/rojo) and [darklua](https://github.com/seaofvoices/darklua) through a preset-based `rwork.toml`, and opens/publishes places via [rodeo](https://github.com/revvy02/rodeo). It expects `rojo` and `rodeo` on your PATH.
+rwork drives [Rojo](https://github.com/rojo-rbx/rojo) and [darklua](https://github.com/seaofvoices/darklua) through builds defined in `rwork.toml`, and opens/publishes places via [rodeo](https://github.com/revvy02/rodeo). It expects `rojo` and `rodeo` on your PATH.
 
 ## Install
 
@@ -16,7 +16,7 @@ Or download a prebuilt binary from [Releases](https://github.com/revvy02/rwork/r
 
 ## Configure
 
-Define build presets in `rwork.toml`. Each preset picks a Rojo project, source dir, darklua config, and build-time globals:
+Define named builds in `rwork.toml`. Each build picks a Rojo project, source dir, darklua config, and build-time globals:
 
 ```toml
 [build.dev]
@@ -36,31 +36,31 @@ darklua = ".darklua/prod.darklua.json"
 __DEV_TOOLS__ = false
 ```
 
-Select one with `--preset <name>` (default `dev`; `--dev`/`--prod` are shorthands).
+Select one with `--build <name>` (default `dev`; `--dev`/`--prod` are shorthands).
 
 ### Named places
 
 Declare shared deploy targets in a `[places]` section, optionally binding each to
-a preset:
+a build:
 
 ```toml
 [places.staging]
 id = 1234567890
-preset = "prod"
+build = "prod"
 
 [places.prod]
 id = 9876543210
-preset = "minify"
+build = "minify"
 ```
 
 `--place` accepts a `[places.*]` name or a raw place id, resolved the same way in
-every command. Targeting a named place makes its bound preset the default, and an
-explicit `--preset` that contradicts the binding is an error — so a dev build
+every command. Targeting a named place makes its bound build the default, and an
+explicit `--build` that contradicts the binding is an error — so a dev build
 can't accidentally ship to a prod-bound place:
 
 ```sh
 rwork publish --place staging          # prod build → place 1234567890
-rwork publish --place staging --dev   # error: conflicts with bound preset "prod"
+rwork publish --place staging --dev   # error: conflicts with bound build "prod"
 ```
 
 `RWORK_PLACE_ID` stays the per-developer scratch target: point it at your own
@@ -70,7 +70,7 @@ rule, so it may also hold a place name).
 ## Commands
 
 ```sh
-rwork build [--open]    # compile + build → .rwork/<preset>/build.rbxl
+rwork build [--open]    # compile + build → .rwork/<build>/build.rbxl
 rwork sync              # live-sync source into an open Studio (rojo serve + watchers)
 rwork dev               # build + open + sync — the local iteration loop
 rwork publish --place <id>   # build + upload to a live place

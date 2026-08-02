@@ -28,7 +28,7 @@ interface TomlBuild {
 
 interface TomlPlace {
 	id?: number | string;
-	preset?: string;
+	build?: string;
 }
 
 interface RworkToml {
@@ -58,9 +58,9 @@ function readRworkToml(): RworkToml {
 export interface NamedPlace {
 	name: string;
 	id: string;
-	// Preset this place is bound to; becomes the default preset when the place
-	// is targeted, and an explicit contradicting --preset is an error.
-	preset?: string;
+	// Build this place is bound to; becomes the default build when the place
+	// is targeted, and an explicit contradicting --build is an error.
+	build?: string;
 }
 
 // Look up a [places.<name>] entry from rwork.toml. Returns undefined when the
@@ -75,9 +75,9 @@ export function lookupPlace(name: string): NamedPlace | undefined {
 	}
 
 	log.info(
-		`[RworkPlace] ${name} → ${entry.id}${entry.preset ? ` (preset ${entry.preset})` : ""}`,
+		`[RworkPlace] ${name} → ${entry.id}${entry.build ? ` (build ${entry.build})` : ""}`,
 	);
-	return { name, id: String(entry.id), preset: entry.preset };
+	return { name, id: String(entry.id), build: entry.build };
 }
 
 export function parseRworkConfig(

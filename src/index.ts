@@ -9,7 +9,7 @@ import { log } from "./log";
 const pkg = require("../package.json") as { version: string };
 
 interface BuildOpts {
-	preset: string;
+	build: string;
 	dev?: boolean;
 	prod?: boolean;
 	project?: string;
@@ -29,8 +29,8 @@ function collectGlobal(pair: string, acc: Record<string, string> = {}) {
 
 interface PlaceTarget {
 	id: string;
-	// Set when the target is a named [places.*] entry with a bound preset.
-	preset?: string;
+	// Set when the target is a named [places.*] entry with a bound build.
+	build?: string;
 }
 
 // Uniform --place resolution, identical for every command that takes it:
@@ -43,30 +43,30 @@ function resolveTarget(place?: string): PlaceTarget | undefined {
 	return lookupPlace(arg) ?? { id: arg };
 }
 
-// The preset a command runs with: an explicit --preset/--dev/--prod wins but
-// must agree with the target place's bound preset; otherwise the binding is
+// The build a command runs with: an explicit --build/--dev/--prod wins but
+// must agree with the target place's bound build; otherwise the binding is
 // the default, then "dev".
-function resolvePreset(opts: BuildOpts, cmd: Command, target?: PlaceTarget): string {
+function resolveBuildName(opts: BuildOpts, cmd: Command, target?: PlaceTarget): string {
 	const explicit = opts.prod
 		? "prod"
 		: opts.dev
 			? "dev"
-			: cmd.getOptionValueSource("preset") === "cli"
-				? opts.preset
+			: cmd.getOptionValueSource("build") === "cli"
+				? opts.build
 				: undefined;
 
-	if (target?.preset && explicit && explicit !== target.preset) {
+	if (target?.build && explicit && explicit !== target.build) {
 		log.error(
-			`--preset ${explicit} conflicts with the target place's bound preset "${target.preset}" (rwork.toml [places])`,
+			`--build ${explicit} conflicts with the target place's bound build "${target.build}" (rwork.toml [places])`,
 		);
 		process.exit(1);
 	}
-	return explicit ?? target?.preset ?? opts.preset;
+	return explicit ?? target?.build ?? opts.build;
 }
 
 // Resolve the shared build-selection options into an RworkBuild.
 function resolveBuild(opts: BuildOpts, cmd: Command, target?: PlaceTarget) {
-	return parseRworkConfig(resolvePreset(opts, cmd, target), {
+	return parseRworkConfig(resolveBuildName(opts, cmd, target), {
 		project: opts.project,
 		src: opts.src,
 		darklua: opts.darklua,
@@ -81,20 +81,20 @@ program
 	.version(pkg.version, "-v, --version")
 	.showHelpAfterError();
 
-// Options shared by every command — they select/override the build preset.
+// Options shared by every command — they select/override the build.
 function withBuildOptions(cmd: Command) {
 	return cmd
-		.option("--preset <name>", "build preset from rwork.toml", "dev")
-		.option("--dev", "shorthand for --preset dev")
-		.option("--prod", "shorthand for --preset prod")
-		.option("--project <path>", "override the preset's Rojo project")
-		.option("--src <path>", "override the preset's source dir")
-		.option("--darklua <path>", "override the preset's darklua config")
+		.option("--build <name>", "a [build.*] entry from rwork.toml", "dev")
+		.option("--dev", "shorthand for --build dev")
+		.option("--prod", "shorthand for --build prod")
+		.option("--project <path>", "override the build's Rojo project")
+		.option("--src <path>", "override the build's source dir")
+		.option("--darklua <path>", "override the build's darklua config")
 		.option("-G, --global <key=value>", "override a build global (repeatable)", collectGlobal);
 }
 
 withBuildOptions(program.command("build"))
-	.description("Compile + build a place file into .rwork/<preset>/build.rbxl")
+	.description("Compile + build a place file into .rwork/<build>/build.rbxl")
 	.option("-o, --open", "open the built place in Studio")
 	.action((opts, cmd) => {
 		build(resolveBuild(opts, cmd), { open: opts.open });
