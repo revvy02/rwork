@@ -36,7 +36,7 @@ darklua = ".darklua/prod.darklua.json"
 __DEV_TOOLS__ = false
 ```
 
-Select one with `--build <name>` (default `dev`; `--dev`/`--prod` are shorthands).
+Select one with `--build <name>` (default `dev`).
 
 ### Named places
 
@@ -59,8 +59,8 @@ explicit `--build` that contradicts the binding is an error — so a dev build
 can't accidentally ship to a prod-bound place:
 
 ```sh
-rwork publish --place staging          # prod build → place 1234567890
-rwork publish --place staging --dev   # error: conflicts with bound build "prod"
+rwork publish --place staging               # prod build → place 1234567890
+rwork publish --place staging --build dev   # error: conflicts with bound build "prod"
 ```
 
 `RWORK_PLACE_ID` stays the per-developer scratch target: point it at your own

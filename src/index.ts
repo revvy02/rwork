@@ -10,8 +10,6 @@ const pkg = require("../package.json") as { version: string };
 
 interface BuildOpts {
 	build: string;
-	dev?: boolean;
-	prod?: boolean;
 	project?: string;
 	src?: string;
 	darklua?: string;
@@ -43,17 +41,12 @@ function resolveTarget(place?: string): PlaceTarget | undefined {
 	return lookupPlace(arg) ?? { id: arg };
 }
 
-// The build a command runs with: an explicit --build/--dev/--prod wins but
-// must agree with the target place's bound build; otherwise the binding is
-// the default, then "dev".
+// The build a command runs with: an explicit --build wins but must agree
+// with the target place's bound build; otherwise the binding is the
+// default, then "dev".
 function resolveBuildName(opts: BuildOpts, cmd: Command, target?: PlaceTarget): string {
-	const explicit = opts.prod
-		? "prod"
-		: opts.dev
-			? "dev"
-			: cmd.getOptionValueSource("build") === "cli"
-				? opts.build
-				: undefined;
+	const explicit =
+		cmd.getOptionValueSource("build") === "cli" ? opts.build : undefined;
 
 	if (target?.build && explicit && explicit !== target.build) {
 		log.error(
@@ -85,8 +78,6 @@ program
 function withBuildOptions(cmd: Command) {
 	return cmd
 		.option("--build <name>", "a [build.*] entry from rwork.toml", "dev")
-		.option("--dev", "shorthand for --build dev")
-		.option("--prod", "shorthand for --build prod")
 		.option("--project <path>", "override the build's Rojo project")
 		.option("--src <path>", "override the build's source dir")
 		.option("--darklua <path>", "override the build's darklua config")
