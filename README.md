@@ -96,6 +96,7 @@ Publishing authenticates via an Open Cloud API key: set `RWORK_API_KEY` (a key w
 - `RWORK_UNIVERSE_ID` — override the auto-resolved universe id when publishing
 - `RWORK_DIAG=1` — verbose diagnostic logging
 - `RWORK_INCLUDE_ASSETS_WHEN_SYNCING` / `RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING` — set `false` to exclude during sync
+- `RWORK_SYNC_PORT` — port for `rojo serve` during sync (rojo's default when unset). Sync also auto-restarts rojo if it crashes (repeated immediate crashes give up).
 
 ## License
 

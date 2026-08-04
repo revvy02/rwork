@@ -137,14 +137,39 @@ export async function sync(rworkBuild: RworkBuild) {
 
 	// rojo serve — main loop. Async so the event loop stays free for the fs.watch
 	// callbacks, the branch-switch interval, and the darklua output pumps.
-	const serveProc = Bun.spawn(["rojo", "serve"], {
-		cwd,
-		stdio: ["inherit", "inherit", "inherit"],
-	});
-	log.diag(`rojo serve spawned (pid=${serveProc.pid})`);
+	// RWORK_SYNC_PORT overrides rojo's default port. A non-zero exit respawns the
+	// server — rojo can panic on transient fs events (e.g. pesde writes temporary
+	// .git objects into roblox_packages while applying patches; rojo 7.7 panics
+	// canonicalizing the already-deleted path) and the sync should survive that.
+	// Repeated immediate crashes (port taken, broken project) give up instead of
+	// loop-crashing.
+	const serveArgs = ["rojo", "serve"];
+	if (envConfig.syncPort) {
+		serveArgs.push("--port", envConfig.syncPort);
+	}
 
-	const exitCode = await serveProc.exited;
-	log.diag(`rojo serve exited code=${exitCode}`);
+	let exitCode: number;
+	let fastCrashes = 0;
+	for (;;) {
+		const startedAt = Date.now();
+		const serveProc = Bun.spawn(serveArgs, {
+			cwd,
+			stdio: ["inherit", "inherit", "inherit"],
+		});
+		log.diag(
+			`rojo serve spawned (pid=${serveProc.pid}${envConfig.syncPort ? ` port=${envConfig.syncPort}` : ""})`,
+		);
+		exitCode = await serveProc.exited;
+		log.diag(`rojo serve exited code=${exitCode}`);
+		if (exitCode === 0) break;
+		fastCrashes = Date.now() - startedAt < 5000 ? fastCrashes + 1 : 0;
+		if (fastCrashes >= 5) {
+			log.error("[sync] rojo serve keeps crashing immediately; giving up");
+			break;
+		}
+		log.warn(`[sync] rojo serve crashed (code=${exitCode}); restarting...`);
+		await Bun.sleep(1000);
+	}
 
 	// Cleanup
 	sourcemapProc.kill();

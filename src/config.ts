@@ -48,6 +48,8 @@ export const envConfig = {
 	includeAssetsWhenSyncing: process.env.RWORK_INCLUDE_ASSETS_WHEN_SYNCING !== "false",
 	includeServerStorageWhenSyncing:
 		process.env.RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING !== "false",
+	// Port for `rojo serve` during sync; rojo's own default when unset.
+	syncPort: process.env.RWORK_SYNC_PORT,
 };
 
 function readRworkToml(): RworkToml {
