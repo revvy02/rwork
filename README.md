@@ -18,6 +18,12 @@ Or download a prebuilt binary from [Releases](https://github.com/revvy02/rwork/r
 
 Define named builds in `rwork.toml`. Each build picks a Rojo project, source dir, darklua config, and build-time globals:
 
+`src` is the darklua-compiled root — the tree that gets require conversion,
+global injection, and the asset/sourcemap watchers. It's optional: omit it for a
+build whose project serves every `$path` raw (native string requires, no
+compile step), and `build`/`sync` skip the darklua pipeline entirely — sync
+becomes just the staged project + `rojo serve`.
+
 ```toml
 [build.dev]
 project = "default.project.json"

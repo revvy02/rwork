@@ -14,7 +14,9 @@ function parseGlobalValue(raw: string): string | boolean | number {
 export interface RworkBuild {
 	name: string;
 	project: string;
-	src: string;
+	// Absent = nothing to compile: no darklua, no watchers, no sourcemap; the
+	// project's $paths are all served raw from the repo.
+	src?: string;
 	darklua?: string;
 	globals?: Record<string, string | boolean | number>;
 }
@@ -106,11 +108,6 @@ export function parseRworkConfig(
 		log.error(`rwork.toml: build.${buildName}.project is required`);
 		process.exit(1);
 	}
-	if (!entry.src) {
-		log.error(`rwork.toml: build.${buildName}.src is required`);
-		process.exit(1);
-	}
-
 	// Merge globals: toml base + CLI overrides
 	let globals = entry.globals
 		? { ...entry.globals }
@@ -133,8 +130,8 @@ export function parseRworkConfig(
 
 	log.info(`[RworkBuild] ${build.name}`);
 	log.info(`  project: ${build.project}`);
-	log.info(`  src:     ${build.src}`);
-	log.info(`  darklua: ${build.darklua ?? "(generated)"}`);
+	log.info(`  src:     ${build.src ?? "(none — project paths served raw)"}`);
+	log.info(`  darklua: ${build.src ? (build.darklua ?? "(generated)") : "(skipped — no src)"}`);
 	if (build.globals) {
 		log.info(`  globals:`);
 		for (const [key, value] of Object.entries(build.globals)) {

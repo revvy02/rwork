@@ -62,13 +62,14 @@ function spawnDarkluaWatch(
 export async function sync(rworkBuild: RworkBuild) {
 	const cwd = `.rwork/${rworkBuild.name}`;
 	const src = rworkBuild.src;
-	const dest = `${cwd}/${src}`;
 	const darkluaConfig = `${cwd}/darklua.json`;
 
 	log.warn(
 		"MAKE SURE YOU PESDE RUN RELOAD TO ENSURE ASPHALT AND ZAP FILES ARE LOADED!",
 	);
-	log.warn(`Darklua Config: ${darkluaConfig}`);
+	if (src) {
+		log.warn(`Darklua Config: ${darkluaConfig}`);
+	}
 
 	// Hard-link assets + generate the project/sourcemap, but let `darklua --watch`
 	// own the .luau build so we don't pay the full one-shot cost twice.
@@ -78,38 +79,43 @@ export async function sync(rworkBuild: RworkBuild) {
 		includeAssets: envConfig.includeAssetsWhenSyncing,
 	});
 
-	// darklua --watch: full build once, then ~ms incremental rebuilds on .luau
-	// content edits. Wait for the initial build before serving so Studio gets a
-	// complete tree.
-	log.info("[sync] Starting darklua --watch...");
-	const { proc: darkluaProc, initialBuild } = spawnDarkluaWatch(
-		src,
-		dest,
-		darkluaConfig,
-		120_000,
-	);
-	await initialBuild;
-	log.success("[sync] darklua initial build complete");
+	// The compile pipeline (darklua --watch, the non-lua watcher, the sourcemap
+	// watcher feeding convert_require) only exists when there's a src to compile.
+	// A src-less build serves every $path raw, so rojo serve alone is live.
+	let darkluaProc: ReturnType<typeof Bun.spawn> | null = null;
+	let sourcemapProc: ReturnType<typeof Bun.spawn> | null = null;
+	if (src) {
+		const dest = `${cwd}/${src}`;
 
-	// rwork's own watcher hard-links non-lua and cleans deletes; darklua owns the
-	// .luau content, so there's no onLuauChange callback.
-	startWatch({ src, dest });
+		// darklua --watch: full build once, then ~ms incremental rebuilds on .luau
+		// content edits. Wait for the initial build before serving so Studio gets a
+		// complete tree.
+		log.info("[sync] Starting darklua --watch...");
+		const darklua = spawnDarkluaWatch(src, dest, darkluaConfig, 120_000);
+		darkluaProc = darklua.proc;
+		await darklua.initialBuild;
+		log.success("[sync] darklua initial build complete");
 
-	// Keep the sourcemap fresh so darklua's convert_require resolves new/renamed
-	// modules (a structural change rewrites it; content-only edits leave it alone,
-	// and darklua no-ops on an unchanged sourcemap).
-	const sourcemapProc = Bun.spawn(
-		[
-			"rojo",
-			"sourcemap",
-			`${cwd}/sourcemap.project.json`,
-			"-o",
-			`${cwd}/sourcemap.json`,
-			"--watch",
-			"--include-non-scripts",
-		],
-		{ stdio: ["inherit", "inherit", "inherit"] },
-	);
+		// rwork's own watcher hard-links non-lua and cleans deletes; darklua owns the
+		// .luau content, so there's no onLuauChange callback.
+		startWatch({ src, dest });
+
+		// Keep the sourcemap fresh so darklua's convert_require resolves new/renamed
+		// modules (a structural change rewrites it; content-only edits leave it alone,
+		// and darklua no-ops on an unchanged sourcemap).
+		sourcemapProc = Bun.spawn(
+			[
+				"rojo",
+				"sourcemap",
+				`${cwd}/sourcemap.project.json`,
+				"-o",
+				`${cwd}/sourcemap.json`,
+				"--watch",
+				"--include-non-scripts",
+			],
+			{ stdio: ["inherit", "inherit", "inherit"] },
+		);
+	}
 
 	// Branch switch detector
 	let initialHead: string;
@@ -127,8 +133,8 @@ export async function sync(rworkBuild: RworkBuild) {
 				if (currentHead !== initialHead) {
 					log.warn("Branch switch detected, aborting sync...");
 					if (branchInterval) clearInterval(branchInterval);
-					sourcemapProc.kill();
-					darkluaProc.kill();
+					sourcemapProc?.kill();
+					darkluaProc?.kill();
 					process.exit(0);
 				}
 			} catch {}
@@ -172,8 +178,8 @@ export async function sync(rworkBuild: RworkBuild) {
 	}
 
 	// Cleanup
-	sourcemapProc.kill();
-	darkluaProc.kill();
+	sourcemapProc?.kill();
+	darkluaProc?.kill();
 	if (branchInterval) clearInterval(branchInterval);
 
 	if (exitCode !== 0) {

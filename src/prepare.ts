@@ -96,8 +96,11 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 		mkdirSync(outputDir, { recursive: true });
 	}
 
-	// Generate darklua config in .rwork/<build>/darklua.json
-	prepareDarklua(build);
+	// Generate darklua config in .rwork/<build>/darklua.json (only when there's
+	// something to compile)
+	if (srcFolder) {
+		prepareDarklua(build);
+	}
 
 	// Output project file: structural transforms + path remapping for cwd=outputDir
 	const outputProject = generateProjectFile(structuredClone(baseFile), {
@@ -110,6 +113,11 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 		join(outputDir, "default.project.json"),
 		JSON.stringify(outputProject, null, "\t"),
 	);
+
+	// Everything below exists to feed darklua: the sourcemap drives
+	// convert_require, and initialSync stages src's non-lua assets. With no src
+	// the remapped project alone is the whole staging output.
+	if (!srcFolder) return;
 
 	// Sourcemap project file: mutate ALL paths (including src/) so rojo resolves from .rwork/<build>/
 	// darklua normalizes ../../ filePaths by joining with sourcemap parent dir, so they match source paths
@@ -138,8 +146,9 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 }
 
 /** Compile .luau once over the prepared tree (one-shot). build/publish use this;
- *  sync runs `darklua --watch` instead. */
+ *  sync runs `darklua --watch` instead. No-op for src-less builds. */
 export function runDarkluaOnce(build: RworkBuild) {
+	if (!build.src) return;
 	const outputDir = `.rwork/${build.name}`;
 	runDarklua(build.src, join(outputDir, build.src), `${outputDir}/darklua.json`);
 }
