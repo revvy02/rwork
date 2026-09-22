@@ -84,6 +84,18 @@ rwork publish --place <id>   # build + upload to a live place
 
 `--open` opens the result in Studio: the built file for `build`, the live place for `publish`.
 
+### Build stamp
+
+`build` and `publish` stamp two attributes on `Workspace` so a place can be
+traced back to its source: `RWORK_BUILD` (the `[build.*]` name) and
+`RWORK_REVISION` (`branch@commit`, with a `-dirty` suffix when tracked files
+have uncommitted changes). `RWORK_REVISION` in the environment replaces the
+whole string (for other CIs, tarball builds, or stamping a release tag);
+otherwise on GitHub Actions it comes from `GITHUB_SHA` / `GITHUB_REF_NAME`,
+elsewhere from `git`, or `unknown` outside a repo. Read it at runtime with
+`workspace:GetAttribute("RWORK_REVISION")`.
+`sync` doesn't stamp, since it never serves Workspace.
+
 ### Live places
 
 Pass `--place <id|name>` (or set `RWORK_PLACE_ID`) to work against a real Roblox place instead of a local file:
@@ -100,6 +112,7 @@ Publishing authenticates via an Open Cloud API key: set `RWORK_API_KEY` (a key w
 - `RWORK_PLACE_ID` — default live place (a raw id or a `[places.*]` name); meant as each dev's personal scratch place
 - `RWORK_API_KEY` — Open Cloud key for publishing (place-publishing scope)
 - `RWORK_UNIVERSE_ID` — override the auto-resolved universe id when publishing
+- `RWORK_REVISION` — override the `RWORK_REVISION` attribute stamped by `build`/`publish` (see Build stamp)
 - `RWORK_DIAG=1` — verbose diagnostic logging
 - `RWORK_INCLUDE_ASSETS_WHEN_SYNCING` / `RWORK_INCLUDE_SERVER_STORAGE_WHEN_SYNCING` — set `false` to exclude during sync
 - `RWORK_SYNC_PORT` — port for `rojo serve` during sync (rojo's default when unset). Sync also auto-restarts rojo if it crashes (repeated immediate crashes give up).

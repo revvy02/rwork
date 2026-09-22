@@ -11,6 +11,14 @@ export interface PrepareOutFlags {
 	includeWorkspace: boolean;
 	includeServerStorage: boolean;
 	includeAssets: boolean;
+	// When set (build/publish), Workspace is stamped with RWORK_BUILD /
+	// RWORK_REVISION attributes identifying what the place was built from.
+	stamp?: BuildStamp;
+}
+
+export interface BuildStamp {
+	build: string;
+	revision: string;
 }
 
 function mergeGlobIgnores(
@@ -29,6 +37,14 @@ function generateProjectFile(
 
 	if (tree && !flags.includeWorkspace) {
 		delete tree.Workspace;
+	} else if (tree && flags.stamp) {
+		// Attributes rather than a child instance: build metadata belongs on the
+		// service, not in its hierarchy, and can't collide with game content.
+		// Read at runtime with workspace:GetAttribute("RWORK_REVISION").
+		const workspace = (tree.Workspace ??= { $className: "Workspace" }) as Record<string, unknown>;
+		const attributes = (workspace.$attributes ??= {}) as Record<string, unknown>;
+		attributes.RWORK_BUILD = flags.stamp.build;
+		attributes.RWORK_REVISION = flags.stamp.revision;
 	}
 
 	if (tree && !flags.includeServerStorage) {
@@ -107,6 +123,7 @@ export function prepareOut(build: RworkBuild, flags: PrepareOutFlags) {
 		includeWorkspace: flags.includeWorkspace,
 		includeServerStorage: flags.includeServerStorage,
 		includeAssets: flags.includeAssets,
+		stamp: flags.stamp,
 	});
 	mutatePaths(outputProject, outputDir, srcFolder);
 	writeProjectFile(
