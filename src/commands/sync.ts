@@ -83,7 +83,10 @@ export async function sync(rworkBuild: RworkBuild) {
 	// watcher feeding convert_require) only exists when there's a src to compile.
 	// A src-less build serves every $path raw, so rojo serve alone is live.
 	let darkluaProc: ReturnType<typeof Bun.spawn> | null = null;
-	let sourcemapProc: ReturnType<typeof Bun.spawn> | null = null;
+	// Holder, not a `let`: the supervisor reassigns it from inside a closure.
+	const sourcemap: { proc: ReturnType<typeof Bun.spawn> | null } = { proc: null };
+	// Set before killing children on shutdown so the supervisors don't respawn them.
+	let stopping = false;
 	if (src) {
 		const dest = `${cwd}/${src}`;
 
@@ -102,19 +105,36 @@ export async function sync(rworkBuild: RworkBuild) {
 
 		// Keep the sourcemap fresh so darklua's convert_require resolves new/renamed
 		// modules (a structural change rewrites it; content-only edits leave it alone,
-		// and darklua no-ops on an unchanged sourcemap).
-		sourcemapProc = Bun.spawn(
-			[
-				"rojo",
-				"sourcemap",
-				`${cwd}/sourcemap.project.json`,
-				"-o",
-				`${cwd}/sourcemap.json`,
-				"--watch",
-				"--include-non-scripts",
-			],
-			{ stdio: ["inherit", "inherit", "inherit"] },
-		);
+		// and darklua no-ops on an unchanged sourcemap). Supervised like rojo serve
+		// below: rojo panics on the same transient fs events, and a dead watcher is
+		// silent — new modules just keep their raw `@alias` requires in the output.
+		const sourcemapArgs = [
+			"rojo",
+			"sourcemap",
+			`${cwd}/sourcemap.project.json`,
+			"-o",
+			`${cwd}/sourcemap.json`,
+			"--watch",
+			"--include-non-scripts",
+		];
+		void (async () => {
+			let fastCrashes = 0;
+			while (!stopping) {
+				const startedAt = Date.now();
+				const proc = Bun.spawn(sourcemapArgs, { stdio: ["inherit", "inherit", "inherit"] });
+				sourcemap.proc = proc;
+				log.diag(`rojo sourcemap --watch spawned (pid=${proc.pid})`);
+				const code = await proc.exited;
+				if (stopping) break;
+				fastCrashes = Date.now() - startedAt < 5000 ? fastCrashes + 1 : 0;
+				if (fastCrashes >= 5) {
+					log.error("[sync] rojo sourcemap --watch keeps crashing immediately; giving up (new modules won't resolve requires until restart)");
+					break;
+				}
+				log.warn(`[sync] rojo sourcemap --watch exited (code=${code}); restarting...`);
+				await Bun.sleep(1000);
+			}
+		})();
 	}
 
 	// Branch switch detector
@@ -132,8 +152,9 @@ export async function sync(rworkBuild: RworkBuild) {
 				const currentHead = readFileSync(".git/HEAD", "utf-8");
 				if (currentHead !== initialHead) {
 					log.warn("Branch switch detected, aborting sync...");
+					stopping = true;
 					if (branchInterval) clearInterval(branchInterval);
-					sourcemapProc?.kill();
+					sourcemap.proc?.kill();
 					darkluaProc?.kill();
 					process.exit(0);
 				}
@@ -178,7 +199,8 @@ export async function sync(rworkBuild: RworkBuild) {
 	}
 
 	// Cleanup
-	sourcemapProc?.kill();
+	stopping = true;
+	sourcemap.proc?.kill();
 	darkluaProc?.kill();
 	if (branchInterval) clearInterval(branchInterval);
 
