@@ -1,9 +1,10 @@
 {
 	"name": "rwork",
-	"version": "0.13.0",
+	"version": "0.14.0-rc.1",
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"test": "bun test",
 		"build": "bun build --compile src/index.ts --outfile bin/rwork",
 		"dev": "bun run src/index.ts"
 	},

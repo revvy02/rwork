@@ -2,21 +2,16 @@ import type { RworkBuild } from "../config";
 import { prepareOut, runDarkluaOnce } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
-import { getRevision } from "../revision";
 
 export function build(rworkBuild: RworkBuild, options?: { open?: boolean }) {
 	const startTime = performance.now();
 	const cwd = `.rwork/${rworkBuild.name}`;
-
-	const revision = getRevision();
-	log.info(`Revision: ${revision}`);
 
 	log.info("Preparing out files...");
 	prepareOut(rworkBuild, {
 		includeWorkspace: true,
 		includeServerStorage: true,
 		includeAssets: true,
-		stamp: { build: rworkBuild.name, revision },
 	});
 	runDarkluaOnce(rworkBuild);
 

@@ -5,7 +5,6 @@ import type { RworkBuild } from "../config";
 import { prepareOut, runDarkluaOnce } from "../prepare";
 import { openStudio } from "../studio";
 import { log } from "../log";
-import { getRevision } from "../revision";
 
 // Resolve the universe that owns a place. RWORK_UNIVERSE_ID overrides; otherwise
 // ask Roblox's public endpoint so callers only ever need the place id.
@@ -117,15 +116,11 @@ export async function publish(
 	const startTime = performance.now();
 	const cwd = `.rwork/${rworkBuild.name}`;
 
-	const revision = getRevision();
-	log.info(`Revision: ${revision}`);
-
 	log.info("Preparing out files...");
 	prepareOut(rworkBuild, {
 		includeWorkspace: true,
 		includeServerStorage: true,
 		includeAssets: true,
-		stamp: { build: rworkBuild.name, revision },
 	});
 	runDarkluaOnce(rworkBuild);
 

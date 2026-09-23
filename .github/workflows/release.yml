@@ -15,6 +15,8 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bunx tsc --noEmit
 
       - name: Check tag matches package.json version
         run: |
@@ -49,6 +51,9 @@ jobs:
           [[ "$(dist/bun-linux-x64/rwork --version)" == "$version" ]]
 
       - name: Create release
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          flags=()
+          [[ "$GITHUB_REF_NAME" == *-* ]] && flags+=(--prerelease --latest=false)
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes "${flags[@]}"
         env:
           GH_TOKEN: ${{ github.token }}
