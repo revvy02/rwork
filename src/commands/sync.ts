@@ -2,62 +2,9 @@ import { readFileSync } from "fs";
 import type { RworkBuild } from "../config";
 import { envConfig } from "../config";
 import { prepareOut } from "../prepare";
-import { startWatch } from "../sync-engine";
+import { pruneStaleLuau, startWatch } from "../sync-engine";
+import { startDarkluaWatch, type DarkluaWatch } from "../darklua-watch";
 import { log } from "../log";
-
-// Spawn `darklua process src dest --watch`, echo its output, and resolve once the
-// initial full build finishes (first "successfully processed" line). darklua then
-// stays alive and rebuilds only changed .luau (+ dependents) incrementally (~ms).
-// Times out so a misconfigured darklua can't hang startup forever.
-function spawnDarkluaWatch(
-	src: string,
-	dest: string,
-	config: string,
-	timeoutMs: number,
-) {
-	const proc = Bun.spawn(
-		["darklua", "process", src, dest, "--watch", "--config", config],
-		{ stdout: "pipe", stderr: "pipe" },
-	);
-
-	const initialBuild = new Promise<void>((resolve) => {
-		let done = false;
-		let timer: ReturnType<typeof setTimeout>;
-		const finish = () => {
-			if (done) return;
-			done = true;
-			clearTimeout(timer);
-			resolve();
-		};
-		timer = setTimeout(() => {
-			log.warn("[sync] darklua initial build timed out; continuing anyway");
-			finish();
-		}, timeoutMs);
-
-		const pump = async (
-			stream: ReadableStream<Uint8Array>,
-			echo: (s: string) => void,
-		) => {
-			const reader = stream.getReader();
-			const decoder = new TextDecoder();
-			for (;;) {
-				const { done: eof, value } = await reader.read();
-				if (eof) break;
-				const text = decoder.decode(value, { stream: true });
-				echo(text);
-				if (text.includes("successfully processed")) finish();
-			}
-		};
-		void pump(proc.stdout as ReadableStream<Uint8Array>, (s) =>
-			process.stdout.write(s),
-		);
-		void pump(proc.stderr as ReadableStream<Uint8Array>, (s) =>
-			process.stderr.write(s),
-		);
-	});
-
-	return { proc, initialBuild };
-}
 
 export async function sync(rworkBuild: RworkBuild) {
 	const cwd = `.rwork/${rworkBuild.name}`;
@@ -82,7 +29,7 @@ export async function sync(rworkBuild: RworkBuild) {
 	// The compile pipeline (darklua --watch, the non-lua watcher, the sourcemap
 	// watcher feeding convert_require) only exists when there's a src to compile.
 	// A src-less build serves every $path raw, so rojo serve alone is live.
-	let darkluaProc: ReturnType<typeof Bun.spawn> | null = null;
+	let darkluaWatch: DarkluaWatch | null = null;
 	// Holder, not a `let`: the supervisor reassigns it from inside a closure.
 	const sourcemap: { proc: ReturnType<typeof Bun.spawn> | null } = { proc: null };
 	// Set before killing children on shutdown so the supervisors don't respawn them.
@@ -92,11 +39,26 @@ export async function sync(rworkBuild: RworkBuild) {
 
 		// darklua --watch: full build once, then ~ms incremental rebuilds on .luau
 		// content edits. Wait for the initial build before serving so Studio gets a
-		// complete tree.
+		// complete tree. Supervised: respawned if it exits, and killed + respawned
+		// if its watcher thread panics (the process survives that but never
+		// compiles again, see #2). Its output also goes to .rwork/<build>/darklua.log.
 		log.info("[sync] Starting darklua --watch...");
-		const darklua = spawnDarkluaWatch(src, dest, darkluaConfig, 120_000);
-		darkluaProc = darklua.proc;
-		await darklua.initialBuild;
+		darkluaWatch = startDarkluaWatch({
+			src,
+			dest,
+			config: darkluaConfig,
+			logFile: `${cwd}/darklua.log`,
+			onReady: (restarts) => {
+				if (restarts === 0) return;
+				// A fresh darklua rebuilds everything but knows nothing about sources
+				// deleted while the previous one was dead: drop their outputs.
+				const pruned = pruneStaleLuau(src, dest);
+				log.success(
+					`[sync] darklua rebuilt after restart #${restarts}${pruned ? ` (pruned ${pruned} stale output${pruned === 1 ? "" : "s"})` : ""}`,
+				);
+			},
+		});
+		await darkluaWatch.ready;
 		log.success("[sync] darklua initial build complete");
 
 		// rwork's own watcher hard-links non-lua and cleans deletes; darklua owns the
@@ -147,7 +109,7 @@ export async function sync(rworkBuild: RworkBuild) {
 
 	let branchInterval: ReturnType<typeof setInterval> | null = null;
 	if (initialHead) {
-		branchInterval = setInterval(() => {
+		branchInterval = setInterval(async () => {
 			try {
 				const currentHead = readFileSync(".git/HEAD", "utf-8");
 				if (currentHead !== initialHead) {
@@ -155,7 +117,7 @@ export async function sync(rworkBuild: RworkBuild) {
 					stopping = true;
 					if (branchInterval) clearInterval(branchInterval);
 					sourcemap.proc?.kill();
-					darkluaProc?.kill();
+					await darkluaWatch?.stop();
 					process.exit(0);
 				}
 			} catch {}
@@ -201,7 +163,7 @@ export async function sync(rworkBuild: RworkBuild) {
 	// Cleanup
 	stopping = true;
 	sourcemap.proc?.kill();
-	darkluaProc?.kill();
+	await darkluaWatch?.stop();
 	if (branchInterval) clearInterval(branchInterval);
 
 	if (exitCode !== 0) {

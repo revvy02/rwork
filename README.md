@@ -100,6 +100,19 @@ sync it is sent through Rojo without serving Workspace; it is not refreshed on
 every edit or commit. Restart sync to refresh it. Existing projects reading the
 old Workspace attributes should switch to ReplicatedStorage.
 
+### Sync supervision
+
+`sync` keeps its child processes alive: `rojo serve`, `rojo sourcemap --watch`,
+and `darklua --watch` are restarted if they exit, and darklua is also killed and
+restarted when its file-watcher thread panics (the process survives that but
+silently stops compiling; see [#2](https://github.com/revvy02/rwork/issues/2)).
+After a darklua restart, outputs whose source no longer exists are pruned, so a
+module deleted while the compiler was dead doesn't linger in the served tree.
+darklua's full output is written to `.rwork/<build>/darklua.log` for post-mortems.
+Use darklua from [revvy02/darklua](https://github.com/revvy02/darklua/releases)
+v0.19.3 or newer, which fixes that panic and the dropped-edit bug
+([#3](https://github.com/revvy02/rwork/issues/3)) at the source.
+
 ### Live places
 
 Pass `--place <id|name>` (or set `RWORK_PLACE_ID`) to work against a real Roblox place instead of a local file:

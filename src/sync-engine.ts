@@ -5,6 +5,7 @@ import {
 	mkdirSync,
 	rmSync,
 	readdirSync,
+	existsSync,
 } from "fs";
 import { dirname, join, relative, resolve, extname } from "path";
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
@@ -95,6 +96,30 @@ export function initialSync(srcDir: string, destDir: string): void {
 		else copied++;
 	}
 	log.info(`[sync] Initial sync complete: ${linked} linked, ${copied} copied`);
+}
+
+/** Delete `.luau` outputs in dest whose source no longer exists. darklua only
+ *  cleans outputs for removals it saw; after it is restarted (or misses an
+ *  event) the output tree can keep modules that are gone from src, which Rojo
+ *  would happily go on serving. Returns how many files were removed. */
+export function pruneStaleLuau(srcDir: string, destDir: string): number {
+	const absSrc = resolve(srcDir);
+	const absDest = resolve(destDir);
+	if (!existsSync(absDest)) return 0;
+
+	let pruned = 0;
+	for (const destPath of walkDir(absDest)) {
+		const rel = relative(absDest, destPath);
+		if (!rel.endsWith(".luau") || existsSync(join(absSrc, rel))) continue;
+		try {
+			unlinkSync(destPath);
+			pruned++;
+			log.info(`[sync] prune: ${rel}`);
+		} catch (e) {
+			log.diag(`prune failed: ${rel}: ${(e as Error).message}`);
+		}
+	}
+	return pruned;
 }
 
 export interface WatchSyncOptions {
