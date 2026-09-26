@@ -84,10 +84,13 @@ test("a darklua that ignores SIGTERM is SIGKILLed and respawned", async () => {
 if [ "$run" = 1 ]; then sleep 0.2; echo "thread 'notify-rs debouncer loop' panicked at x.rs:1:1:" >&2; fi
 while :; do sleep 0.1; done`,
 	);
-	const { watch } = watchWith(dir, cmd);
+	const { watch, readyCalls } = watchWith(dir, cmd);
 	await watch.ready;
 
-	expect(await waitFor(() => watch.restarts === 1)).toBe(true);
+	// Wait for the respawned instance's build line, not just the restart counter:
+	// `restarts` increments before the new process has even started.
+	expect(await waitFor(() => readyCalls.length === 2)).toBe(true);
+	expect(watch.restarts).toBe(1);
 	expect(spawnCount(dir)).toBe(2);
 	const first = Number(readFileSync(join(dir, "spawns"), "utf8").split("\n")[0]);
 	// The TERM-ignoring first instance must be gone (SIGKILL escalation).
@@ -122,10 +125,11 @@ test("repeated immediate exits give up instead of crash-looping, and ready still
 	const { watch, readyCalls } = watchWith(dir, cmd, { maxFastCrashes: 3 });
 	await watch.ready;
 
-	expect(await waitFor(() => watch.gaveUp)).toBe(true);
+	// Every attempt prints the build line before exiting, so onReady fires for
+	// each; the exit can be observed before its output is pumped, so wait for both.
+	expect(await waitFor(() => watch.gaveUp && readyCalls.length === 3)).toBe(true);
 	expect(spawnCount(dir)).toBe(3);
 	expect(watch.restarts).toBe(2);
-	// Every attempt printed the build line first, so onReady fired for each.
 	expect(readyCalls).toEqual([0, 1, 2]);
 
 	await watch.stop();
